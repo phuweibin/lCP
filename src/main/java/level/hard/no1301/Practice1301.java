@@ -1,12 +1,12 @@
-package practice;
+package level.hard.no1301;
 
 import java.util.Arrays;
-import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.PriorityBlockingQueue;
+import java.util.Map;
 
 /**
+ * 题目信息：
  * 1301. 最大得分的路径数目
  * 困难
  * 给你一个正方形字符数组 board ，你从数组最右下方的字符 'S' 出发。
@@ -30,105 +30,110 @@ import java.util.concurrent.PriorityBlockingQueue;
  * <p>
  * 提示：
  * 2 <= board.length == board[i].length <= 100
+ * <p>
+ * 解法分析：
+ * 边界：     f(x_max, y_max) = 1;
+ * 转移方程：  f(x, y) = max(f(x, y+1), f(x+1, y), f(x+1, y+1)) + s(x, y)
+ * 最优子结构：f(x, y+1),f(x+1, y),f(x+1, y+1)
  */
 public class Practice1301 {
 
     private static final int divisor = (int) Math.pow(10, 9) + 7;
-    private static final int[][] direction = {{-1, 0}, {0, -1}, {-1, -1}};
-    private static BlockingQueue<Point> priorityQueue = new PriorityBlockingQueue<>(100, Comparator.comparingLong(Point::getTotalScore).reversed());
 
-    public static int[] pathsWithMaxScore(List<String> board) throws InterruptedException {
+    /**
+     * @param x
+     * @param y
+     * @param points
+     * @return array[0] = score, array[1] = solution
+     */
+    private static int[] calculateCurrent(int x, int y, Point[][] points) {
+
+        if (x + 1 < points.length && y + 1 < points.length) {
+            Point left = points[x + 1][y];
+            Point pointBellow = points[x][y + 1];
+            if (left.solutionCount > 0 || pointBellow.solutionCount > 0) {
+                if (left.score > pointBellow.score) {
+                    return new int[]{(int) left.score, (int) left.solutionCount};
+                } else if (left.score < pointBellow.score) {
+                    return new int[]{(int) pointBellow.score, (int) pointBellow.solutionCount};
+                } else {
+                    return new int[]{(int) left.score, (int) ((left.solutionCount + pointBellow.solutionCount) % divisor)};
+                }
+            }
+            Point pointLeftAndBellow = points[x + 1][y + 1];
+            return new int[]{(int) pointLeftAndBellow.score, (int) pointLeftAndBellow.solutionCount};
+        } else if (x + 1 < points.length) {
+            Point left = points[x + 1][y];
+            return new int[]{(int) left.score, (int) left.solutionCount};
+        } else {
+            Point pointBellow = points[x][y + 1];
+            return new int[]{(int) pointBellow.score, (int) pointBellow.solutionCount};
+        }
+    }
+
+    public static int[] pathsWithMaxScore(List<String> board) {
+        char[][] boardChar = new char[board.size()][board.size()];
+        for (int i = 0; i < boardChar.length; i++) {
+            boardChar[i] = board.get(i).toCharArray();
+        }
+        Map<Character, Integer> scoreMap = new HashMap<>();
+        for (int i = 0; i < 10; i++) {
+            scoreMap.put((char) (i + '1'), i + 1);
+        }
         int size = board.size();
-        String[][] arr = parseBoard(board);
-        Point currentPoint = new Point(size - 1, size - 1);
-        currentPoint.setTotalScore(0);
-        priorityQueue.add(currentPoint);
+        Point[][] dp = new Point[size][size];
 
-        calculateMaxScoreByStep(arr, currentPoint);
+        // 边界值
 
-        long maxScore = 0;
-        int maxScorePlans = 0;
-        Point maxScorePoint = null;
-        while ((maxScorePoint = priorityQueue.poll()) != null) {
-            if (maxScorePoint.exited && maxScore == 0) {
-                maxScore = maxScorePoint.getTotalScore() - 100;
-                maxScorePlans++;
-                continue;
-            }
-            if (maxScorePoint.exited && (maxScorePoint.getTotalScore() - 100) == maxScore) {
-                maxScorePlans++;
-            }
-        }
-
-        return new int[]{(int) (maxScore) % divisor, maxScorePlans};
-    }
-
-    private static void calculateMaxScoreByStep(String[][] arr, Point currentPoint) throws InterruptedException {
-        for (int[] itemStep : direction) {
-            int x = currentPoint.x + itemStep[0];
-            int y = currentPoint.y + itemStep[1];
-            if (x < 0 || y < 0 || "X".equalsIgnoreCase(arr[x][y])) {
-                continue;
-            }
-            if ("E".equalsIgnoreCase(arr[x][y])) {
-                long oldTotalScore = currentPoint.getTotalScore();
-                Point newPoint = new Point(x, y);
-                newPoint.setTotalScore(oldTotalScore + 100);
-                newPoint.exited = true;
-                priorityQueue.put(newPoint);
-                continue;
-            }
-            long oldTotalScore = currentPoint.getTotalScore();
-            Point newPoint = new Point(x, y);
-            newPoint.setTotalScore(oldTotalScore + Integer.parseInt(arr[x][y]));
-            priorityQueue.put(newPoint);
-            calculateMaxScoreByStep(arr, newPoint);
-        }
-    }
-
-    public static String[][] parseBoard(List<String> board) {
-        int size = board.size();
-        String[][] arr = new String[size][size];
-        for (int i = 0; i < size; i++) {
-            for (int j = 0; j < size; j++) {
-                arr[i][j] = board.get(i).charAt(j) + "";
+        for (int x = size - 1; x >= 0; x--) {
+            for (int y = size - 1; y >= 0; y--) {
+                if (boardChar[x][y] == 'X') {
+                    dp[x][y] = new Point(0, 0);
+                } else if (boardChar[x][y] == 'S') {
+                    dp[x][y] = new Point(1, 0);
+                } else if (boardChar[x][y] == 'E') {
+                    int[] preOutput = calculateCurrent(x, y, dp);
+                    dp[x][y] = new Point(preOutput[1], preOutput[0]);
+                } else {
+                    // 数字
+                    int[] preOutput = calculateCurrent(x, y, dp);
+                    if (preOutput[1] == 0) {
+                        dp[x][y] = new Point(0, 0);
+                    } else {
+                        dp[x][y] = new Point(preOutput[1], preOutput[0] + scoreMap.get(boardChar[x][y]));
+                    }
+                }
             }
         }
-        return arr;
+        if (dp[0][0].solutionCount < 0) {
+            return new int[]{0, 0};
+        }
+        long s = dp[0][0].score % divisor;
+        long sol = dp[0][0].solutionCount % divisor;
+        return new int[]{(int) s, (int) sol};
     }
+
 
     static class Point {
-        private int x;
-        private int y;
-        private boolean exited = false;
-        private long totalScore;
 
-        public Point(int x, int y) {
-            this.x = x;
-            this.y = y;
+        private long solutionCount;
+        private long score;
+
+        public Point(long solutionCount, long score) {
+            this.solutionCount = solutionCount;
+            this.score = score;
         }
 
-        public long getTotalScore() {
-            return totalScore;
-        }
-
-        public void setTotalScore(long score) {
-            this.totalScore = score;
-        }
-
-        public boolean getExited() {
-            return exited;
-        }
     }
 
-    public static void main(String[] args) throws InterruptedException {
+    public static void main(String[] args) {
         List<String> board = Arrays.asList("E23", "2X2", "12S");
         System.out.println(Arrays.toString(pathsWithMaxScore(board)));
-        priorityQueue.clear();
         board = Arrays.asList("E12", "1X1", "21S");
         System.out.println(Arrays.toString(pathsWithMaxScore(board)));
-        priorityQueue.clear();
         board = Arrays.asList("E11", "XXX", "11S");
+        System.out.println(Arrays.toString(pathsWithMaxScore(board)));
+        board = Arrays.asList("EX", "XS");
         System.out.println(Arrays.toString(pathsWithMaxScore(board)));
     }
 }
